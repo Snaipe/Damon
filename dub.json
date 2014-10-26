@@ -1,0 +1,20 @@
+{
+	"name": "Damon",
+	"authors": [
+		"Snaipe"
+	],
+	"configurations": [
+		{
+			"name": "library",
+			"targetType": "library",
+			"targetPath": "lib",
+			"excludedSourceFiles": ["source/test/*"]
+		},
+		{
+			"name": "unittest",
+			"mainSourceFile": "test/test.d",
+			"targetType": "executable",
+			"targetPath": "bin"
+		}
+	]
+}
