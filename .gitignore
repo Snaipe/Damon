@@ -1,0 +1,8 @@
+.dub/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.swp
+*~
