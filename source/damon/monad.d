@@ -19,3 +19,19 @@ class Monad(T) {
 	abstract ReturnType!F bind(F)(F callback)
 			if (isMonadicOperation(Monad, T, F));
 }
+
+mixin template monadicOperations(M) {
+	ReturnType!F bindF(F)(F callback) if (isLesserMonadicOperation(M, T, F)) {
+		return bind((T t) => new M!R(callback(t)));
+	}
+
+	auto opBinary(string op, A)(A rhs)
+			if (op == ">>" && isMonadicOperation!(M, T, A)) {
+		return bind(rhs);
+	}
+
+	auto opBinary(string op, A)(A rhs)
+			if (op == ">>>" && isLesserMonadicOperation(M, T, F)) {
+		return bindF(rhs);
+	}
+}
