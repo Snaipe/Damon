@@ -66,6 +66,22 @@ class Function(alias F) if (isSomeFunction!F) {
 	mixin functionOperations;
 }
 
+template op(string o) {
+	auto operator(T, Q)(T t, Q q) {
+		return mixin ("t" ~ o ~ "q");
+	}
+	alias op = operator;
+}
+
+unittest {
+	alias plus = op!"+";
+	assert (plus(1, 2) == 3);
+
+	alias concat = op!"~";
+	assert (concat("hello ", "world") == "hello world");
+	assert (!__traits(compiles, concat(1, 2)));
+}
+
 private template __Range(int length) {
     static if (length <= 0)
         alias TypeTuple!() __Range;
