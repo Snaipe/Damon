@@ -1,6 +1,7 @@
 module damon.functional;
 
 import std.traits;
+import std.typecons: TypeTuple;
 
 auto fmap(F, T = ParameterTypeTuple!F[0])(T array, F fun) if (isCallable!F) {
 	ReturnType!F result[] = new ReturnType!F [array.length];
@@ -42,6 +43,13 @@ class Function(alias F) if (isSomeFunction!F) {
 	mixin functionOperations;
 }
 
+private template __Range(int length) {
+    static if (length <= 0)
+        alias TypeTuple!() __Range;
+    else
+        alias TypeTuple!(__Range!(length - 1), length - 1) __Range;
+}
+
 template curry(alias F) {
 	class CurryiedFunction(int provided) {
 		private ParameterTypeTuple!F args;
@@ -53,21 +61,8 @@ template curry(alias F) {
 					"Curryied function cannot be called with more"
 					"arguments than its original definition");
 
-			// This is a temporary hack to overcome the lack of static
-			// iteration for args & params...
-			static assert (T.length <= 4,
-					"Partial function application does not yet support"
-					"more than 4 parameters at a time.");
-
-			static if (provided     < args.length && T.length >= 1)
-				args[provided] = params[0];
-			static if (provided + 1 < args.length && T.length >= 2)
-				args[provided + 1] = params[1];
-			static if (provided + 2 < args.length && T.length >= 3)
-				args[provided + 2] = params[2];
-			static if (provided + 3 < args.length && T.length >= 4)
-				args[provided + 3] = params[3];
-
+			foreach (i; __Range!(T.length))
+				args[provided + i] = params[i];
 
 			static if (provided + T.length == ParameterTypeTuple!F.length)
 				return F(args);
