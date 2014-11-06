@@ -26,79 +26,83 @@ module damon.monad;
 import std.traits;
 import damon.functional;
 
-template isLesserMonadicOperation(M, alias T, F) {
-	alias Monad = TemplateOf!M;
+template isMonadicOperation(F, alias T) {
 	alias ArgList = ParameterTypeTuple!F;
-	enum bool isLesserMonadicOperation = isCallable!F
+	enum bool isMonadicOperation = isCallable!F
 			&& ArgList.length == 1 && is(ArgList[0] == T);
 }
 
-template isMonadicOperation(M, alias T, F) {
-	alias Monad = TemplateOf!M;
-	enum bool isMonadicOperation = isLesserMonadicOperation!(M, T, F)
-			&& __traits(isSame, TemplateOf!(ReturnType!F), Monad);
-}
+abstract class Monad(T) {
+	R bind(F, R = ReturnType!F)(F callback) if (isMonadicOperation!(F, T)) {
+		R container;
+		R *res = &container;
+		void *wrapper(T *arg) {
+			*res = callback(* arg);
+			return res;
+		}
+		container = * cast(R *) this.bindImpl(&wrapper);
+		return container;
+	}
 
-class Monad(T) {
-	abstract ReturnType!F bind(F)(F callback)
-			if (isMonadicOperation(Monad, T, F));
+	protected abstract void *bindImpl(void *delegate(T *) callback);
+	mixin monadicOperations!(Monad);
 }
 
 mixin template monadicOperations(M) {
-	ReturnType!F bindF(F)(F callback) if (isLesserMonadicOperation(M, T, F)) {
-		return bind((T t) => new M!R(callback(t)));
+	M!R bindF(F, R = ReturnType!F)(F callback) if (isMonadicOperation!(F, T)) {
+		return bind((T t) => (M!void).from_value(callback(t)));
 	}
 
 	auto opBinary(string op, A)(A rhs)
-			if (op == ">>" && isMonadicOperation!(M, T, A)) {
+			if (op == ">>" && isMonadicOperation!(A, T)) {
 		return bind(rhs);
 	}
 
 	auto opBinary(string op, A)(A rhs)
-			if (op == ">>>" && isLesserMonadicOperation(M, T, F)) {
+			if (op == ">>>" && isMonadicOperation!(A, T)) {
 		return bindF(rhs);
 	}
 }
 
-mixin template dispatch(alias F, alias M) {
+mixin template dispatch(alias M) {
 	auto opDispatch(string s)() {
-		return bind((T v) => F!M(__traits(getMember, v, s)));
+		return bind((T v) => from_value(__traits(getMember, v, s)));
 	}
 
 	auto opDispatch(string s, Args...)(Args args) {
-		return bind((T v) => F!M(__traits(getMember, v, s)(args)));
+		return bind((T v) => from_value(__traits(getMember, v, s)(args)));
 	}
 }
 
-template from_value(alias M) {
-	M!V from_value(V)(V val) {
-		return new M!V(val);
+abstract class Maybe(T) : Monad!T {
+	@property abstract T value();
+
+	static Maybe!V from_value(V)(V val) {
+		return val is null ? new Nothing!V : new Just!V(val);
 	}
+
+	mixin dispatch!(Maybe);
+	mixin monadicOperations!(Maybe);
 }
 
-template from_values(alias M) {
-	M!V from_values(V)(V[] val) {
-		return new M!V(val);
-	}
-}
-
-class Maybe(T) : Monad!(T) {
+class Just(T) : Maybe!T {
 	private T val;
 
 	this(T val) { this.val = val; }
-	this()      { this(null); }
 
-	@property T value() { return this.val; }
+	@property override T value() { return this.val; }
 
-	ReturnType!F bind(F)(F callback) if (isMonadicOperation!(Maybe, T, F)) {
-		if (this.val is null)
-			return new ReturnType!F();
-		else
-			return callback(this.val);
+	protected override void *bindImpl(void *delegate(T *) callback) {
+		return callback(&this.val);
 	}
+}
 
-	mixin dispatch!(from_value, Maybe);
-	mixin monadicOperations!(Maybe);
+class Nothing(T) : Maybe!T {
+	@property override T value() { return null; }
+
+	protected override void *bindImpl(void *delegate(T *) callback) {
+		return &this;
+	}
 }
 
 unittest {
@@ -113,14 +117,14 @@ unittest {
 	}
 
 	C c = new C;
-	Maybe!A a1 = from_value!Maybe(new A(new B(c)));
-	Maybe!A a2 = from_value!Maybe(new A(null));
+	Just!A a1 = new Just!A(new A(new B(c)));
+	Maybe!A a2 = new Just!A(new A(null));
 
-	auto getB = delegate (A a) => new Maybe!B(a.b);
-	auto getC = (B b) => new Maybe!C(b.c);
+	auto getB = delegate (A a) => (Maybe!void).from_value(a.b);
+	auto getC = (B b) => b.c;
 
 	assert (a1.b.c.value is c);
-	assert (a1.bind(getB).bind(getC).value is c);
-	assert ((a1 >> getB >> getC).value is c);
+	assert (a1.bind(getB).bindF(getC).value is c);
+	assert ((a1 >> getB >>> getC).value is c);
 	assert (a2.b.c.value is null);
 }
