@@ -24,6 +24,7 @@
 module damon.monad;
 
 import std.traits;
+import std.variant;
 import damon.functional;
 
 template isMonadicOperation(F, alias T) {
@@ -32,39 +33,46 @@ template isMonadicOperation(F, alias T) {
 			&& ArgList.length == 1 && is(ArgList[0] == T);
 }
 
-abstract class Monad(T) {
-	R bind(F, R = ReturnType!F)(F callback) if (isMonadicOperation!(F, T)) {
-		R container;
-		R *res = &container;
-		void *wrapper(T *arg) {
-			*res = callback(* arg);
-			return res;
-		}
-		container = * cast(R *) this.bindImpl(&wrapper);
-		return container;
-	}
-
-	protected abstract void *bindImpl(void *delegate(T *) callback);
-	mixin monadicOperations!(Monad);
+template FirstArg(F) {
+	alias FirstArg = ParameterTypeTuple!F[0];
 }
 
-mixin template monadicOperations(M) {
-	M!R bindF(F, R = ReturnType!F)(F callback) if (isMonadicOperation!(F, T)) {
-		return bind((T t) => (M!void).from_value(callback(t)));
+abstract class Monad(T) {
+	R bind(F, R = ReturnType!F, T = FirstArg!F)(F callback)
+			if (isMonadicOperation!(F, T)) {
+
+		Variant v = this.bindImpl((Variant arg) => Variant(callback(arg.get!T)));
+		if (v.convertsTo!R)
+			return v.get!R;
+
+		// if the value is a pointer, force its conversion to the proper
+		// pointer type. This exists to overcome the impossibility to
+		// convert Nothing!A to Nothing!B, even though the template
+		// parameter is not used to store anything.
+		return * cast (R *) v.get!(void *);
 	}
 
-	auto opBinary(string op, A)(A rhs)
+	protected abstract Variant bindImpl(Variant delegate(Variant) callback);
+}
+
+mixin template monadicOperations(alias M) {
+	M!R bindF(F, R = ReturnType!F, T = FirstArg!F)(F callback)
+			if (isMonadicOperation!(F, T)) {
+		return bind((T t) => (M!Object).from_value(callback(t)));
+	}
+
+	auto opBinary(string op, A, T = FirstArg!A)(A rhs)
 			if (op == ">>" && isMonadicOperation!(A, T)) {
 		return bind(rhs);
 	}
 
-	auto opBinary(string op, A)(A rhs)
+	auto opBinary(string op, A, T = FirstArg!A)(A rhs)
 			if (op == ">>>" && isMonadicOperation!(A, T)) {
 		return bindF(rhs);
 	}
 }
 
-mixin template dispatch(alias M) {
+mixin template dispatch() {
 	auto opDispatch(string s)() {
 		return bind((T v) => from_value(__traits(getMember, v, s)));
 	}
@@ -75,33 +83,37 @@ mixin template dispatch(alias M) {
 }
 
 abstract class Maybe(T) : Monad!T {
-	@property abstract T value();
-
 	static Maybe!V from_value(V)(V val) {
 		return val is null ? new Nothing!V : new Just!V(val);
 	}
 
-	mixin dispatch!(Maybe);
+	abstract @property T value();
+
+	abstract bool hasValue();
+
+	mixin dispatch;
 	mixin monadicOperations!(Maybe);
 }
 
 class Just(T) : Maybe!T {
 	private T val;
 
-	this(T val) { this.val = val; }
+	this(T val ...) { this.val = val; }
 
-	@property override T value() { return this.val; }
+	override @property T value() { return this.val; }
+	override bool hasValue() { return true; }
 
-	protected override void *bindImpl(void *delegate(T *) callback) {
-		return callback(&this.val);
+	protected override Variant bindImpl(Variant delegate(Variant) callback) {
+		return callback(Variant(this.val));
 	}
 }
 
 class Nothing(T) : Maybe!T {
-	@property override T value() { return null; }
+	override @property T value() { return null; }
+	override bool hasValue() { return false; }
 
-	protected override void *bindImpl(void *delegate(T *) callback) {
-		return &this;
+	protected override Variant bindImpl(Variant delegate(Variant) callback) {
+		return Variant(&this);
 	}
 }
 
@@ -109,22 +121,27 @@ unittest {
 	class C { }
 	class B {
 		C c;
-		this(C c) { this.c = c; }
+		this(C c ...) { this.c = c; }
 	}
 	class A {
 		B b;
-		this(B b) { this.b = b; }
+		this(B b ...) { this.b = b; }
 	}
 
 	C c = new C;
-	Just!A a1 = new Just!A(new A(new B(c)));
+	Just!A a1 = new Just!A(c);
 	Maybe!A a2 = new Just!A(new A(null));
 
-	auto getB = delegate (A a) => (Maybe!void).from_value(a.b);
+	auto getB = delegate (A a) => Maybe!Object.from_value(a.b);
 	auto getC = (B b) => b.c;
 
-	assert (a1.b.c.value is c);
-	assert (a1.bind(getB).bindF(getC).value is c);
-	assert ((a1 >> getB >>> getC).value is c);
-	assert (a2.b.c.value is null);
+	auto v1 = a1.b.c;
+	auto v2 = a1.bind(getB).bindF(getC);
+	auto v3 = a1 >> getB >>> getC;
+	auto v4 = a2.b.c;
+
+	assert (v1.hasValue && v1.value is c);
+	assert (v2.hasValue && v2.value is c);
+	assert (v3.hasValue && v3.value is c);
+	assert (!v4.hasValue && v3.value is null);
 }
