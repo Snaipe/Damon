@@ -145,3 +145,60 @@ unittest {
 	assert (v3.hasValue && v3.value is c);
 	assert (!v4.hasValue && v3.value is null);
 }
+
+class Many(T) : Monad!(T) {
+	private T[] val;
+
+	this(T[] val) { this.val = val; }
+
+	@property T[] values() { return this.val; }
+	@property ulong length() { return this.val.length; }
+
+	private Many!R flatten(R)(Many!R[] array) {
+		size_t len = 0;
+		foreach (r; array)
+			len += r.length;
+		R[] result = new R[len];
+
+		size_t i = 0;
+		foreach (t; array)
+			foreach (e; t.values)
+				result[i++] = e;
+
+		return new Many!R(result);
+	}
+
+	ReturnType!F bind(F)(F callback) if (isMonadicOperation!(Many, T, F)) {
+		return flatten(fmap(val, callback));
+	}
+
+	T opIndex(size_t i) {
+		return val[i];
+	}
+
+	auto opDispatch(string s)() {
+		return bind((T v) => from_values!Many(__traits(getMember, v, s)));
+	}
+
+	mixin monadicOperations!(Many);
+}
+
+unittest {
+	class B {
+		int[] arr;
+		this(int[] arr) { this.arr = arr; }
+	}
+	class A {
+		B[] bs;
+		this(B[] arr) { this.bs = arr; }
+	}
+
+	Many!A a = new Many!A([
+			new A([new B([1, 2]), new B([3, 4])]),
+			new A([new B([5, 6, 7, 8])])
+	]);
+
+	int[] result = a.bs.arr.values;
+	for (int i = 0; i < result.length; ++i)
+		assert (result[i] == i + 1);
+}
