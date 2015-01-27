@@ -23,13 +23,37 @@
  */
 module damon.functional;
 
-import std.traits;
+import std.traits: isCallable, ReturnType, ParameterTypeTuple, isSomeFunction;
 import std.typecons: TypeTuple;
 
-auto fmap(F, T = ParameterTypeTuple!F[0])(T array, F fun) if (isCallable!F) {
+template isMapApplication(F, T, R) {
+	alias Tup = ParameterTypeTuple!F;
+	enum bool isMapApplication = Tup.length == 0
+		&& is(Tup[0] == T) && is (ReturnType!F == R);
+}
+
+interface Functor(T) {
+	Functor!R fmap(T, R, F)(F func) if (isCallable!F && isMapApplication!F);
+}
+
+auto fmap(F, T = ParameterTypeTuple!F[0])(T[] array, F fun) if (isCallable!F) {
 	ReturnType!F result[] = new ReturnType!F [array.length];
 	for (size_t i = 0; i < array.length; ++i)
 		result[i] = fun(array[i]);
+	return result;
+}
+
+T[] flatten(T)(T[][] array) {
+	size_t len = 0;
+	foreach (t; array)
+		len += t.length;
+	T[] result = new T[len];
+
+	size_t i = 0;
+	foreach (t; array)
+		foreach (e; t.values)
+			result[i++] = e;
+
 	return result;
 }
 
@@ -118,9 +142,7 @@ template curry(alias F) {
 }
 
 unittest {
-	long test(int i, long j) {
-		return i * i + j;
-	}
+	auto test = (int i, long j) => i * i + j;
 	auto partial = curry!test;
 	assert (partial(7)(2) == test(7, 2));
 	assert (partial(7, 2) == test(7, 2));

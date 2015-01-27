@@ -12,7 +12,7 @@
 		},
 		{
 			"name": "unittest",
-			"mainSourceFile": "test/test.d",
+			"mainSourceFile": "source/test/test.d",
 			"targetType": "executable",
 			"targetPath": "bin"
 		}
