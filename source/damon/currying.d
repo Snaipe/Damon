@@ -23,6 +23,11 @@
  */
 module damon.currying;
 
+import std.traits: ParameterTypeTuple;
+import std.typecons: TypeTuple;
+
+import damon.functional : functionOperations;
+
 private template __Range(int length) {
     static if (length <= 0)
         alias TypeTuple!() __Range;
@@ -38,7 +43,7 @@ template curry(alias F) {
 
 		auto opCall(T...)(T params) {
 			static assert (provided + T.length <= ParameterTypeTuple!F.length,
-					"Curryied function cannot be called with more"
+					"Curryied function cannot be called with more "
 					"arguments than its original definition");
 
 			foreach (i; __Range!(T.length))

@@ -24,7 +24,6 @@
 module damon.functional;
 
 import std.traits: isCallable, ReturnType, ParameterTypeTuple, isSomeFunction;
-import std.typecons: TypeTuple;
 
 template isMapApplication(F, T, R) {
 	alias Tup = ParameterTypeTuple!F;
@@ -70,24 +69,24 @@ mixin template functionOperations() {
 	}
 }
 
-unittest {
-	long ten() { return 10; }
-	long two_power(long x) { return 2 ^^ x; }
-	assert (compose!(ten, two_power)() == two_power(ten()));
-
-	auto f_ten = new Function!ten;
-	auto f_two_power = new Function!two_power;
-	assert ((f_ten ~ f_two_power)() == two_power(ten()));
-	assert ((f_ten ~ &two_power)() == two_power(ten()));
-	assert ((&ten ~ f_two_power)() == two_power(ten()));
-}
-
 class Function(alias F) if (isSomeFunction!F) {
 	ReturnType!F opCall(ParameterTypeTuple!F args) {
 		return F(args);
 	}
 
 	mixin functionOperations;
+}
+
+unittest {
+	long ten() { return 10; }
+	auto two_power = (long x) => 2 ^^ x;
+	assert (compose!(ten, two_power)() == two_power(ten()));
+
+	auto f_ten = new Function!ten;
+	auto f_two_power = new Function!two_power;
+	assert ((f_ten ~ f_two_power)() == two_power(ten()));
+	assert ((f_ten ~ two_power)() == two_power(ten()));
+	assert ((&ten ~ f_two_power)() == two_power(ten()));
 }
 
 template op(string o) {
