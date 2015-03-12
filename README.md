@@ -9,6 +9,14 @@ Bringing functional programming to D.
 Damon is a tentative to spice up the D programming language with functional
 programming concepts.
 
+## Compilation
+
+```bash
+$ git clone git@github.com:Snaipe/Damon.git
+$ cd Damon
+$ dub test
+```
+
 ## Features:
 
 ### Currying:
