@@ -79,11 +79,10 @@ mixin template functionOperations() {
 	}
 }
 
-class Function(alias F) if (isSomeFunction!F) {
-	ReturnType!F opCall(ParameterTypeTuple!F args) {
-		return F(args);
+class Function(F...) if (F.length == 1 && isCallable!F) {
+	ReturnType!(F[0]) opCall(ParameterTypeTuple!(F[0]) args) {
+		return F[0](args);
 	}
-
 	mixin functionOperations;
 }
 
