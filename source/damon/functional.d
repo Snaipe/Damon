@@ -57,7 +57,11 @@ T[] flatten(T)(T[][] array) {
 }
 
 template compose(alias F, alias G) if (isCallable!F && isCallable!G) {
-	enum compose = (ParameterTypeTuple!F args) => G(F(args));
+	enum compose = (ParameterTypeTuple!G args) => F(G(args));
+}
+
+template pipe(alias F, alias G) if (isCallable!F && isCallable!G) {
+	enum pipe = compose!(G, F);
 }
 
 mixin template functionOperations() {
@@ -66,6 +70,12 @@ mixin template functionOperations() {
 	}
 	auto opBinaryRight(string op, F)(F f) if (op == "~" && isCallable!F) {
 		return compose!(f, this);
+	}
+	auto opBinary(string op, F)(F f) if (op == "|" && isCallable!F) {
+		return pipe!(this, f);
+	}
+	auto opBinaryRight(string op, F)(F f) if (op == "|" && isCallable!F) {
+		return pipe!(f, this);
 	}
 }
 
@@ -80,13 +90,18 @@ class Function(alias F) if (isSomeFunction!F) {
 unittest {
 	long ten() { return 10; }
 	auto two_power = (long x) => 2 ^^ x;
-	assert (compose!(ten, two_power)() == two_power(ten()));
+	assert (compose!(two_power, ten)() == two_power(ten()));
+	assert (pipe!(ten, two_power)() == two_power(ten()));
 
 	auto f_ten = new Function!ten;
 	auto f_two_power = new Function!two_power;
-	assert ((f_ten ~ f_two_power)() == two_power(ten()));
-	assert ((f_ten ~ two_power)() == two_power(ten()));
-	assert ((&ten ~ f_two_power)() == two_power(ten()));
+	assert ((f_two_power ~ f_ten)() == two_power(ten()));
+	assert ((f_two_power ~  &ten)() == two_power(ten()));
+	assert ((two_power   ~ f_ten)() == two_power(ten()));
+
+	assert ((f_ten | f_two_power)() == two_power(ten()));
+	assert ((f_ten |   two_power)() == two_power(ten()));
+	assert ((&ten  | f_two_power)() == two_power(ten()));
 }
 
 template op(string o) {
