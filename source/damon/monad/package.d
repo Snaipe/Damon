@@ -63,3 +63,6 @@ mixin template monadicOperations(alias M) {
 		return bindF(rhs);
 	}
 }
+
+public import damon.monad.many;
+public import damon.monad.maybe;
