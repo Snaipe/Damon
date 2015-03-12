@@ -103,18 +103,31 @@ unittest {
 	assert ((&ten  | f_two_power)() == two_power(ten()));
 }
 
-template op(string o) {
-	auto operator(T, Q)(T t, Q q) {
-		return mixin ("t" ~ o ~ "q");
+template binary(string o) {
+	class Op {
+		auto opCall(T, Q)(T t, Q q) {
+			return mixin ("t" ~ o ~ "q");
+		}
+		mixin functionOperations;
 	}
-	alias op = operator;
+	auto binary() { return new Op; }
+}
+
+template unary(string o) {
+	class Op {
+		auto opCall(T, Q)(T t, Q q) {
+			return mixin (o ~ "q");
+		}
+		mixin functionOperations;
+	}
+	auto unary() { return new Op; }
 }
 
 unittest {
-	alias plus = op!"+";
+	auto plus = binary!"+";
 	assert (plus(1, 2) == 3);
 
-	alias concat = op!"~";
+	auto concat = binary!"~";
 	assert (concat("hello ", "world") == "hello world");
 	assert (!__traits(compiles, concat(1, 2)));
 }
